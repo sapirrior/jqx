@@ -1,0 +1,280 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  verify:
+    name: Verify & Test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      - name: Check workspace
+        run: cargo check --workspace
+
+      - name: Run Clippy
+        run: cargo clippy --workspace -- -D warnings
+
+      - name: Run tests
+        run: cargo test --workspace
+
+      - name: Verify Version Match
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"
+          PKG_VERSION=$(cargo metadata --format-version 1 --no-deps | grep -o '"version":"[^"]*"' | head -n 1 | cut -d '"' -f 4)
+          echo "Tag Version: $TAG"
+          echo "Package Version: $PKG_VERSION"
+          if [ "$TAG" != "$PKG_VERSION" ]; then
+            echo "::error::Version mismatch! Git tag ($TAG) does not match Cargo.toml version ($PKG_VERSION)."
+            exit 1
+          fi
+
+  build:
+    name: Build (${{ matrix.target }})
+    needs: verify
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Linux x86_64 (static musl)
+          - target: x86_64-unknown-linux-musl
+            os: ubuntu-latest
+            output: jqx-linux-x64
+            use_cross: false
+
+          # Linux aarch64 (static musl)
+          - target: aarch64-unknown-linux-musl
+            os: ubuntu-latest
+            output: jqx-linux-arm64
+            use_cross: true
+
+          # Android ARM64
+          - target: aarch64-linux-android
+            os: ubuntu-latest
+            output: jqx-android-arm64
+            use_cross: true
+
+          # macOS x86_64 (Intel)
+          - target: x86_64-apple-darwin
+            os: macos-latest
+            output: jqx-darwin-x64
+            use_cross: false
+
+          # macOS Apple Silicon
+          - target: aarch64-apple-darwin
+            os: macos-latest
+            output: jqx-darwin-arm64
+            use_cross: false
+
+          # Windows x86_64
+          - target: x86_64-pc-windows-msvc
+            os: windows-latest
+            output: jqx-windows-x64.exe
+            use_cross: false
+
+          # Windows ARM64
+          - target: aarch64-pc-windows-msvc
+            os: windows-latest
+            output: jqx-windows-arm64.exe
+            use_cross: false
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Install musl tools (Linux x86_64)
+        if: matrix.target == 'x86_64-unknown-linux-musl'
+        run: sudo apt-get update && sudo apt-get install -y musl-tools
+
+      - name: Install cross (cross-compilation targets)
+        if: matrix.use_cross
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cross
+
+      - name: Build target binary
+        run: |
+          if [ "${{ matrix.use_cross }}" = "true" ]; then
+            cross build --release --target ${{ matrix.target }} -p jqx
+          else
+            cargo build --release --target ${{ matrix.target }} -p jqx
+          fi
+        shell: bash
+
+      - name: Prepare binary artifact
+        run: |
+          mkdir -p artifacts
+          if [ -f "target/${{ matrix.target }}/release/jqx.exe" ]; then
+            cp "target/${{ matrix.target }}/release/jqx.exe" "${{ matrix.output }}"
+          else
+            cp "target/${{ matrix.target }}/release/jqx" "${{ matrix.output }}"
+          fi
+        shell: bash
+
+      - name: Upload Binary Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.output }}
+          path: ${{ matrix.output }}
+          if-no-files-found: error
+
+  release:
+    name: Release & Publish
+    needs: [verify, build]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Download all binary artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Generate SHA-256 Checksums
+        run: |
+          cd dist
+          chmod +x jqx-* 2>/dev/null || true
+          sha256sum * > checksums.txt
+          echo "Generated checksums:"
+          cat checksums.txt
+
+      - name: Generate AI Release Notes with ant
+        env:
+          ANT_API_KEY: ${{ secrets.ANT_API_KEY || secrets.GEMINI_API_KEY }}
+          ANT_MODEL_NAME: ${{ vars.ANT_MODEL_NAME || 'google/gemini-flash-lite-latest' }}
+        run: |
+          TAG_NAME="${{ github.ref_name }}"
+          PREV_TAG=$(git describe --tags --abbrev=0 "${TAG_NAME}^" 2>/dev/null || echo "")
+
+          echo "Current Tag: $TAG_NAME"
+          echo "Previous Tag: ${PREV_TAG:-<initial release>}"
+
+          # Extract commit list
+          if [ -n "$PREV_TAG" ]; then
+            COMMITS=$(git log --oneline --no-merges "${PREV_TAG}..${TAG_NAME}")
+            DIFF_STAT=$(git diff --stat "${PREV_TAG}..${TAG_NAME}")
+            RAW_DIFF=$(git diff "${PREV_TAG}..${TAG_NAME}")
+          else
+            COMMITS=$(git log --oneline --no-merges -n 50 "${TAG_NAME}")
+            DIFF_STAT=$(git diff --stat "${TAG_NAME}~1..${TAG_NAME}" 2>/dev/null || echo "")
+            RAW_DIFF=$(git diff "${TAG_NAME}~1..${TAG_NAME}" 2>/dev/null || echo "")
+          fi
+
+          # Truncate raw diff if too large (capped at ~35,000 characters)
+          MAX_DIFF_CHARS=35000
+          if [ ${#RAW_DIFF} -gt $MAX_DIFF_CHARS ]; then
+            TRUNCATED_DIFF="${RAW_DIFF:0:$MAX_DIFF_CHARS}"
+            DIFF_CONTENT="$TRUNCATED_DIFF"$'\n\n[... Note: Remaining diff truncated to prevent context overflow ...]'
+          else
+            DIFF_CONTENT="$RAW_DIFF"
+          fi
+
+          # Prepare instruction prompt for ant-actions
+          PROMPT_FILE=$(mktemp)
+          cat << 'EOF' > "$PROMPT_FILE"
+          You are an expert release engineer writing GitHub Release Notes for the `jqx` CLI codebase.
+          `jqx` is a fast, memory-safe, zero-runtime-dependency JSON query executor written in Rust.
+
+          Your task: Analyze the provided git commits, diff stats, and code diff to produce authoritative, high-signal, developer-friendly Release Notes in GitHub Flavored Markdown.
+
+          Structure and formatting guidelines:
+          1. **Executive Summary**: 1–2 punchy sentences capturing the core theme, major milestones, or purpose of this release.
+          2. **🚨 Breaking Changes (if applicable)**: Explicitly call out any breaking behavior, changed CLI arguments, or deprecated configurations. If none, omit this section entirely.
+          3. **🚀 Highlights & New Features**: Categorize distinct capabilities added in this release. Explain *why* it matters to a developer, not just what lines changed.
+          4. **🛠️ Bug Fixes & Improvements**: Bulleted list of stability, security, or performance fixes.
+          5. **📝 Commits**: Format the raw commit list cleanly under a collapsible `<details><summary>View full commit log</summary>...</details>` block.
+          6. **📦 Artifacts & Quickstart**: A tiny 2-line snippet showing how to install via `curl -fsSL https://raw.githubusercontent.com/sapirrior/jqx/main/install.sh | bash` or run directly.
+
+          Tone & Rules:
+          - Direct, polished, and developer-centric. Avoid corporate fluff or generic buzzwords.
+          - Never repeat the same change across multiple categories.
+          - Strictly output valid markdown. Do not prefix or suffix with meta-commentary like "Here are your release notes:".
+          EOF
+
+          CONTEXT_FILE=$(mktemp)
+          cat << EOF > "$CONTEXT_FILE"
+          Tag: $TAG_NAME
+          Previous Tag: ${PREV_TAG:-None (Initial Release)}
+
+          ### Commits:
+          $COMMITS
+
+          ### Diff Stat:
+          $DIFF_STAT
+
+          ### Diff (Truncated if large):
+          $DIFF_CONTENT
+          EOF
+
+          AI_INPUT="$(cat $PROMPT_FILE)
+
+          Context:
+          $(cat $CONTEXT_FILE)"
+
+          # Run ant-actions with fallback
+          if [ -n "$ANT_API_KEY" ]; then
+            echo "Invoking ant-actions with model: $ANT_MODEL_NAME..."
+            if npx -y ant-actions -p "$AI_INPUT" -m "$ANT_MODEL_NAME" --output-format text --bare --no-session-persistence > release_notes.md 2>stderr.log; then
+              echo "AI release notes generated successfully."
+            else
+              echo "Warning: ant-actions failed to generate release notes. Check stderr:"
+              cat stderr.log
+              echo "Falling back to git commit log..."
+              {
+                echo "## Release $TAG_NAME"
+                echo ""
+                echo "### Commits"
+                echo "$COMMITS"
+              } > release_notes.md
+            fi
+          else
+            echo "ANT_API_KEY / GEMINI_API_KEY secret not found. Using fallback git release notes."
+            {
+              echo "## Release $TAG_NAME"
+              echo ""
+              echo "### Commits"
+              echo "$COMMITS"
+            } > release_notes.md
+          fi
+
+          rm -f "$PROMPT_FILE" "$CONTEXT_FILE" stderr.log
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: ${{ github.ref_name }}
+          body_path: release_notes.md
+          files: |
+            dist/*
+          draft: false
+          prerelease: false
