@@ -1,0 +1,26 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/jqx-json",
+    "crates/jqx-diag",
+    "crates/jqx-syntax",
+    "crates/jqx-hir",
+    "crates/jqx-eval",
+    "crates/jqx-plan",
+    "crates/jqx-engine",
+    "crates/jqx",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.75"
+authors = ["Nolan", "jqx contributors"]
+license = "MIT OR Apache-2.0"
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+
+[workspace.lints.clippy]
+all = "warn"
+pedantic = "warn"

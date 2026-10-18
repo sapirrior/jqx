@@ -1,0 +1,20 @@
+[package]
+name = "jqx"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "jqx"
+path = "src/main.rs"
+
+[dependencies]
+jqx-diag = { path = "../jqx-diag" }
+jqx-engine = { path = "../jqx-engine" }
+jqx-eval = { path = "../jqx-eval" }
+jqx-json = { path = "../jqx-json" }
+
+[lints]
+workspace = true

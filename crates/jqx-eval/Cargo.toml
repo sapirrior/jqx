@@ -1,0 +1,16 @@
+[package]
+name = "jqx-eval"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+jqx-diag = { path = "../jqx-diag" }
+jqx-hir = { path = "../jqx-hir" }
+jqx-json = { path = "../jqx-json" }
+jqx-syntax = { path = "../jqx-syntax" }
+
+[lints]
+workspace = true
