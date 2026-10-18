@@ -163,8 +163,8 @@ jobs:
 
       - name: Generate AI Release Notes with ant
         env:
-          ANT_API_KEY: ${{ secrets.ANT_API_KEY || secrets.GEMINI_API_KEY }}
-          ANT_MODEL_NAME: ${{ vars.ANT_MODEL_NAME || 'google/gemini-flash-lite-latest' }}
+          ANT_API_KEY: ${{ secrets.ANT_API_KEY }}
+          ANT_MODEL: ${{ secrets.ANT_MODEL || 'google/gemini-flash-lite-latest' }}
         run: |
           TAG_NAME="${{ github.ref_name }}"
           PREV_TAG=$(git describe --tags --abbrev=0 "${TAG_NAME}^" 2>/dev/null || echo "")
@@ -235,9 +235,10 @@ jobs:
           $(cat $CONTEXT_FILE)"
 
           # Run ant-actions with fallback
+          MODEL="${ANT_MODEL:-google/gemini-flash-lite-latest}"
           if [ -n "$ANT_API_KEY" ]; then
-            echo "Invoking ant-actions with model: $ANT_MODEL_NAME..."
-            if npx -y ant-actions -p "$AI_INPUT" -m "$ANT_MODEL_NAME" --output-format text --bare --no-session-persistence > release_notes.md 2>stderr.log; then
+            echo "Invoking ant-actions with model: $MODEL..."
+            if npx -y ant-actions -p "$AI_INPUT" -m "$MODEL" --output-format text --bare --no-session-persistence > release_notes.md 2>stderr.log; then
               echo "AI release notes generated successfully."
             else
               echo "Warning: ant-actions failed to generate release notes. Check stderr:"
@@ -251,7 +252,7 @@ jobs:
               } > release_notes.md
             fi
           else
-            echo "ANT_API_KEY / GEMINI_API_KEY secret not found. Using fallback git release notes."
+            echo "ANT_API_KEY secret not found. Using fallback git release notes."
             {
               echo "## Release $TAG_NAME"
               echo ""
