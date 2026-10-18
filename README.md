@@ -8,7 +8,7 @@
 <p align="center">
   <a href="https://github.com/sapirrior/jqx/actions"><img src="https://img.shields.io/github/actions/workflow/status/sapirrior/jqx/release.yml?branch=main&style=flat-square" alt="Build Status"></a>
   <a href="https://github.com/sapirrior/jqx/releases/latest"><img src="https://img.shields.io/github/v/release/sapirrior/jqx?style=flat-square" alt="Latest Release"></a>
-  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT%2FApache--2.0-blue?style=flat-square" alt="License"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue?style=flat-square" alt="License"></a>
 </p>
 
 ---
@@ -161,9 +161,4 @@ Contributions, feedback, and ideas are warmly welcome! Feel free to open an issu
 
 ## License
 
-Dual-licensed under either of:
-
-- Apache License, Version 2.0 ([LICENSE-APACHE](http://www.apache.org/licenses/LICENSE-2.0))
-- MIT License ([LICENSE-MIT](http://opensource.org/licenses/MIT))
-
-at your option.
+This project is licensed under the [MIT License](LICENSE).

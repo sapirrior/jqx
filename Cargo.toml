@@ -9,8 +9,8 @@ members = [
 version = "0.1.0"
 edition = "2021"
 rust-version = "1.75"
-authors = ["Nolan", "jqx contributors"]
-license = "MIT OR Apache-2.0"
+authors = ["jqx contributors"]
+license = "MIT"
 
 [workspace.lints.rust]
 unsafe_code = "forbid"
