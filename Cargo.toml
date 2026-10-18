@@ -1,13 +1,7 @@
 [workspace]
 resolver = "2"
 members = [
-    "crates/jqx-json",
-    "crates/jqx-diag",
-    "crates/jqx-syntax",
-    "crates/jqx-hir",
-    "crates/jqx-eval",
-    "crates/jqx-plan",
-    "crates/jqx-engine",
+    "crates/jqx-core",
     "crates/jqx",
 ]
 

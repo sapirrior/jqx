@@ -7,9 +7,7 @@
 mod cli;
 
 use cli::CliConfig;
-use jqx_engine::Query;
-use jqx_eval::Budget;
-use jqx_json::Value;
+use jqx_core::{Budget, Query, Value};
 use std::fs::File;
 use std::io::{self, BufReader, Read};
 
