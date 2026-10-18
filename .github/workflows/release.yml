@@ -57,16 +57,10 @@ jobs:
             output: jqx-linux-x64
             use_cross: false
 
-          # Linux aarch64 (static musl)
+          # Linux aarch64 (static musl - runs on Linux ARM64 & Android/Termux)
           - target: aarch64-unknown-linux-musl
             os: ubuntu-latest
             output: jqx-linux-arm64
-            use_cross: true
-
-          # Android ARM64
-          - target: aarch64-linux-android
-            os: ubuntu-latest
-            output: jqx-android-arm64
             use_cross: true
 
           # macOS x86_64 (Intel)

@@ -121,8 +121,15 @@ else
         fi
     fi
 
-    if [ "$is_termux" = "true" ] && [ "$arch" = "arm64" ]; then
-        asset_name="jqx-android-arm64"
+    if [ "$is_termux" = "true" ]; then
+        case "$arch" in
+            arm64) asset_name="jqx-linux-arm64" ;;
+            x64)   asset_name="jqx-linux-x64" ;;
+            *)
+                echo -e "${RED}Error: Unsupported Termux architecture ${arch}${NC}"
+                exit 1
+                ;;
+        esac
     else
         combo="$os-$arch"
         case "$combo" in
